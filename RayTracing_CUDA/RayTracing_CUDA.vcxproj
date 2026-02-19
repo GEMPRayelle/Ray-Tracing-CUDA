@@ -58,8 +58,9 @@
       <CodeGeneration>compute_89,sm_89</CodeGeneration>
     </CudaCompile>
     <PostBuildEvent>
-      <Command>cd /d $(OutDir) &amp;&amp; "$(OutDir)$(TargetName)$(TargetExt)" &amp;&amp; copy /Y output.ppm "$(SolutionDir)output.ppm"
-</Command>
+      <Command>"$(OutDir)$(TargetName)$(TargetExt)"
+copy /Y "$(OutDir)output.ppm" "$(SolutionDir)output.ppm"</Command>
+      <Message>Running ray tracer and Coping output.ppm to solution directory..</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -87,6 +88,8 @@
   <ItemGroup>
     <ClInclude Include="CUDA_memo.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Types.h" />
+    <ClInclude Include="Vec3.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

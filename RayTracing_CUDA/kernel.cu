@@ -1,14 +1,13 @@
 ﻿#include "device_launch_parameters.h"
 
-#include "CUDA_memo.h"
 #include "pch.h"
+#include "Types.h"
+#include "Vec3.h"
 
-//CUDA 함수 한정자
-#define GLOBAL __global__ //GPU에서 실행, CPU에서 호출
-#define DEVICE __device__ //GPU에서 실행, GPU에서 호출
-#define HOST   __host__   //CPU에서 실행, CPU에서 호출 (default) 
-//return은 반드시 void
-//Device code와 Host code의 경계
+#include <iostream>
+#include <stdio.h>
+
+#include <fstream>
 
 //GPU에서 벡터 덧셈을 수행하는 헬퍼 함수
 cudaError_t addWithCuda(int* c, const int* a, const int* b, unsigned int size);
@@ -38,7 +37,7 @@ GLOBAL void addKernel(int* c, const int* a, const int* b)
 }
 
 //렌더 커널(픽셀 병렬 처리)
-GLOBAL void Render(float* frameBuffer, int maxX, int maxY)
+GLOBAL void Render(Vector3* frameBuffer, int maxX, int maxY)
 {
     //각 스레드가 담당할 픽셀 좌표(i,j)를 계산
     int i = threadIdx.x + blockIdx.x * blockDim.x; //block내 스레드 위치 + block Offset
@@ -46,10 +45,12 @@ GLOBAL void Render(float* frameBuffer, int maxX, int maxY)
     //이미지 범위를 벗어나는 스레드는 즉시 종료
     if (i >= maxX || j >= maxY) return;
 
-    int pixelIndex = j * maxX * 3 + i * 3;
-    frameBuffer[pixelIndex + 0] = float(i) / float(maxX); // R
-    frameBuffer[pixelIndex + 1] = float(j) / float(maxY); // G
-    frameBuffer[pixelIndex + 2] = 0.2f;                   // B
+    int pixelIndex = j * maxX + i;
+    frameBuffer[pixelIndex] = Color(
+        double(i) / double(maxX),
+        double(j) / double(maxY),
+        0.2
+    );
 }
 
 int main()
@@ -122,19 +123,23 @@ int main()
 
     const int blockWidth = 8;
     const int blockHeight = 8;
+    
+    std::cerr << "Rendering a " << imageWidth << "x" << imageHeight << " image "
+              << "in "          << blockWidth << "x" << blockHeight << " blocks.\n";
 
-    dim3 threads(blockWidth, blockHeight);
-    dim3 blocks(
-        (imageWidth + blockWidth - 1) / blockWidth,
-        (imageHeight + blockHeight - 1) / blockHeight
-    );
+    int numPixels = imageWidth * imageHeight;
+    size_t frameBufferSize = numPixels * sizeof(Vector3);
 
-    //Unified Memory(cudaMallocManaged)
-    float* frameBuffer = nullptr;
-    size_t frameBufferSize = 3 * size_t(imageWidth) * size_t(imageHeight) * sizeof(float);
+    //픽셀 1개 = Color(Vec3) 1개 
+    Vector3* frameBuffer;
+
+    // GPU Unified Memory로 프레임 버퍼 할당 (Vec3 배열)
     CheckCudaErrors(cudaMallocManaged((void**)&frameBuffer, frameBufferSize));
     //cudaMalloc, cudaMemcpy : GPU 전용 할당, CPU<->GPU 복사를 직접 관리해야 함
     //cudaMallocManaged      : CPU/GPU가 같은 포인터로 접근. 데이터 이동을 런타임이 처리한다
+
+    dim3 blocks(imageWidth / blockWidth + 1, imageHeight / blockHeight + 1);
+    dim3 threads(blockWidth, blockHeight);
 
     Render<<<blocks, threads>>>(frameBuffer, imageWidth, imageHeight);
 
@@ -148,17 +153,27 @@ int main()
 
     //좌하단이 (0,0)인 좌표계로 가정
     //이미지 뷰어는 좌상단이 (0,0)처럼 보이는 경우가 많아 j를 역순으로 내려가며 기록함
-    for (int j = imageHeight - 1; j >= 0; --j) {
-        for (int i = 0; i < imageWidth; ++i) {
-            size_t pixelIndex = size_t(j) * size_t(imageWidth) * 3 + size_t(i) * 3;
-            int ir = int(255.99f * frameBuffer[pixelIndex + 0]);
-            int ig = int(255.99f * frameBuffer[pixelIndex + 1]);
-            int ib = int(255.99f * frameBuffer[pixelIndex + 2]);
+    for (int j = imageHeight - 1; j >= 0; --j) 
+    {
+        std::cerr << "\rWriting scanline " << (imageHeight - 1 - j)
+            << " / " << imageHeight << std::flush;
+
+        for (int i = 0; i < imageWidth; ++i) 
+        {
+            size_t pixelIndex = j * imageWidth + i;
+            Color color = frameBuffer[pixelIndex];
+
+            int ir = int(255.99f * color.x());
+            int ig = int(255.99f * color.y());
+            int ib = int(255.99f * color.z());
+
             outFile << ir << " " << ig << " " << ib << "\n";
         }
     }
+    outFile.close();
+    std::cerr << "\nDone. Saved to output.ppm\n";
 
-    CHECK_CUDA(cudaDeviceReset());
+    CheckCudaErrors(cudaFree(frameBuffer));
 #pragma endregion
 
 
