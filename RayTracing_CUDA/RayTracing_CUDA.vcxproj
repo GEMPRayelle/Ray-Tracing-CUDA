@@ -57,6 +57,10 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CodeGeneration>compute_89,sm_89</CodeGeneration>
     </CudaCompile>
+    <PostBuildEvent>
+      <Command>cd /d $(OutDir) &amp;&amp; "$(OutDir)$(TargetName)$(TargetExt)" &amp;&amp; copy /Y output.ppm "$(SolutionDir)output.ppm"
+</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>

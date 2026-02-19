@@ -1,9 +1,4 @@
-﻿
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
-
-#include <stdio.h>
-#include <iostream>
+﻿#include "device_launch_parameters.h"
 
 #include "CUDA_memo.h"
 #include "pch.h"
@@ -33,13 +28,28 @@ GLOBAL void addKernel(int* c, const int* a, const int* b)
     //threadIdx.x  // 블록 내 x축 스레드 인덱스 (0부터 시작)
     //threadIdx.y  // 블록 내 y축 스레드 인덱스
     //threadIdx.z  // 블록 내 z축 스레드 인덱스
-    //
+    
     //blockIdx.x   // 그리드 내 x축 블록 인덱스
     //blockIdx.y   // 그리드 내 y축 블록 인덱스
     //blockIdx.z   // 그리드 내 z축 블록 인덱스
-    //
+    
     //blockDim.x   // 블록의 x축 크기 (스레드 개수)
     //gridDim.x    // 그리드의 x축 크기 (블록 개수)
+}
+
+//렌더 커널(픽셀 병렬 처리)
+GLOBAL void Render(float* frameBuffer, int maxX, int maxY)
+{
+    //각 스레드가 담당할 픽셀 좌표(i,j)를 계산
+    int i = threadIdx.x + blockIdx.x * blockDim.x; //block내 스레드 위치 + block Offset
+    int j = threadIdx.y + blockIdx.y * blockDim.y; //block내 스레드 위치 + block Offset
+    //이미지 범위를 벗어나는 스레드는 즉시 종료
+    if (i >= maxX || j >= maxY) return;
+
+    int pixelIndex = j * maxX * 3 + i * 3;
+    frameBuffer[pixelIndex + 0] = float(i) / float(maxX); // R
+    frameBuffer[pixelIndex + 1] = float(j) / float(maxY); // G
+    frameBuffer[pixelIndex + 2] = 0.2f;                   // B
 }
 
 int main()
@@ -62,6 +72,7 @@ int main()
 #pragma endregion
 
 #pragma region Ray Tracing in CUDA - CUDA Setup
+    /*
     std::cout << "CUDA Vector Addition Example" << std::endl;
 
     //Host(CPU)쪽 입력 배열 a,b와 출력 결과인 c 선언
@@ -101,7 +112,55 @@ int main()
         return 1;
     }
 
+    */
 #pragma endregion
+
+#pragma region Ray Tracing in CUDA - FrameBuffer(Image) Rendering
+    
+    const int imageWidth = 1440;
+    const int imageHeight = 720;
+
+    const int blockWidth = 8;
+    const int blockHeight = 8;
+
+    dim3 threads(blockWidth, blockHeight);
+    dim3 blocks(
+        (imageWidth + blockWidth - 1) / blockWidth,
+        (imageHeight + blockHeight - 1) / blockHeight
+    );
+
+    //Unified Memory(cudaMallocManaged)
+    float* frameBuffer = nullptr;
+    size_t frameBufferSize = 3 * size_t(imageWidth) * size_t(imageHeight) * sizeof(float);
+    CheckCudaErrors(cudaMallocManaged((void**)&frameBuffer, frameBufferSize));
+    //cudaMalloc, cudaMemcpy : GPU 전용 할당, CPU<->GPU 복사를 직접 관리해야 함
+    //cudaMallocManaged      : CPU/GPU가 같은 포인터로 접근. 데이터 이동을 런타임이 처리한다
+
+    Render<<<blocks, threads>>>(frameBuffer, imageWidth, imageHeight);
+
+    //커널 실행 직후에는 비동기라서 에러가 늦게 나타나기에
+    //두개의 에러 조합으로 실행 에러를 즉시 잡는게 좋음
+    CheckCudaErrors(cudaGetLastError());
+    CheckCudaErrors(cudaDeviceSynchronize());
+
+    std::ofstream outFile("output.ppm");
+    outFile << "P3\n" << imageWidth << " " << imageHeight << "\n255\n";
+
+    //좌하단이 (0,0)인 좌표계로 가정
+    //이미지 뷰어는 좌상단이 (0,0)처럼 보이는 경우가 많아 j를 역순으로 내려가며 기록함
+    for (int j = imageHeight - 1; j >= 0; --j) {
+        for (int i = 0; i < imageWidth; ++i) {
+            size_t pixelIndex = size_t(j) * size_t(imageWidth) * 3 + size_t(i) * 3;
+            int ir = int(255.99f * frameBuffer[pixelIndex + 0]);
+            int ig = int(255.99f * frameBuffer[pixelIndex + 1]);
+            int ib = int(255.99f * frameBuffer[pixelIndex + 2]);
+            outFile << ir << " " << ig << " " << ib << "\n";
+        }
+    }
+
+    CHECK_CUDA(cudaDeviceReset());
+#pragma endregion
+
 
 }
 
