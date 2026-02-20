@@ -1,4 +1,6 @@
-﻿#include "Types.h"
+﻿#pragma once
+
+#include "Types.h"
 
 #include <cmath>
 #include <iostream>
@@ -60,7 +62,7 @@ struct Vector3
 		return (fabs(e[0]) < threshhold)
 			&& (fabs(e[1]) < threshhold)
 			&& (fabs(e[2]) < threshhold);
-	}	
+	}
 };
 
 typedef Vector3 Vec3;
@@ -71,10 +73,12 @@ using Color = Vector3;
 //벡터 유틸리티 함수
 inline std::ostream& operator<<(std::ostream& out, const Vector3& v)
 {
-	return out << v.e[0] << ' ' << v.e[1] << ' ' << v.e[2];
+	return out << v.e[0] 
+		<< ' ' << v.e[1] 
+		<< ' ' << v.e[2];
 }
 
-HOSTDEVICE inline Vector3 operator+(const Vector3& u, const Vector3 v)
+HOSTDEVICE inline Vector3 operator+(const Vector3& u, const Vector3& v)
 {
 	return Vector3(u.e[0] + v.e[0], u.e[1] + v.e[1], u.e[2] + v.e[2]);
 }
@@ -107,18 +111,18 @@ HOSTDEVICE inline Vector3 operator/(const Vector3& v, double t)
 HOSTDEVICE inline double Dot(const Vector3& u, const Vector3& v)
 {
 	return u.e[0] * v.e[0]
-		+ u.e[1] * v.e[1]
-		+ u.e[2] * v.e[2];
+		 + u.e[1] * v.e[1]
+		 + u.e[2] * v.e[2];
 }
 
 HOSTDEVICE inline Vector3 Cross(const Vector3& u, const Vector3& v)
 {
 	return Vector3(u.e[1] * v.e[2] - u.e[2] * v.e[1],
-		u.e[2] * v.e[0] - u.e[0] * v.e[2],
-		u.e[0] * v.e[1] - u.e[1] * v.e[0]);
+				   u.e[2] * v.e[0] - u.e[0] * v.e[2],
+				   u.e[0] * v.e[1] - u.e[1] * v.e[0]);
 }
 
-HOSTDEVICE inline Vector3 UnitVector(const Vector3& u, const Vector3& v)
+HOSTDEVICE inline Vector3 UnitVector(const Vector3& v)
 {
 	return v / v.Length();
 }

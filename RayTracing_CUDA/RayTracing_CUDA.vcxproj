@@ -88,6 +88,7 @@ copy /Y "$(OutDir)output.ppm" "$(SolutionDir)output.ppm"</Command>
   <ItemGroup>
     <ClInclude Include="CUDA_memo.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Ray.h" />
     <ClInclude Include="Types.h" />
     <ClInclude Include="Vec3.h" />
   </ItemGroup>

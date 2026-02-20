@@ -3,6 +3,7 @@
 #include "pch.h"
 #include "Types.h"
 #include "Vec3.h"
+#include "Ray.h"
 
 #include <iostream>
 #include <stdio.h>
@@ -36,8 +37,20 @@ GLOBAL void addKernel(int* c, const int* a, const int* b)
     //gridDim.x    // 그리드의 x축 크기 (블록 개수)
 }
 
+//레이 방향 벡터를 단위 벡터로 변환후, Y 성분을 이용해 흰색과 하늘색을 Lerp 수행
+DEVICE Color RayColor(const Ray& r) 
+{
+    Vector3 unitDirection = UnitVector(r.direction());
+    double t = 0.5 * (unitDirection.y() + 1.0);
+    
+    //아래(흰색) -> 위(하늘색) 보간 (t = 0 흰색 아래를 향하는 방향, t = 1 하늘색 위를 향하는 방향)
+    return (1.0 - t) * Color(1.0, 1.0, 1.0) + t * Color(0.5, 0.7, 1.0);
+}
+
 //렌더 커널(픽셀 병렬 처리)
-GLOBAL void Render(Vector3* frameBuffer, int maxX, int maxY)
+//Ray 방향의 y 성분에 따라 흰색 -> 하늘색 Gradient 생성
+GLOBAL void Render(Vector3* frameBuffer, int maxX, int maxY,
+    Vector3 lowerLeftCenter, Vector3 horizontal, Vector3 vertical, Vector3 origin)
 {
     //각 스레드가 담당할 픽셀 좌표(i,j)를 계산
     int i = threadIdx.x + blockIdx.x * blockDim.x; //block내 스레드 위치 + block Offset
@@ -46,11 +59,14 @@ GLOBAL void Render(Vector3* frameBuffer, int maxX, int maxY)
     if (i >= maxX || j >= maxY) return;
 
     int pixelIndex = j * maxX + i;
-    frameBuffer[pixelIndex] = Color(
-        double(i) / double(maxX),
-        double(j) / double(maxY),
-        0.2
-    );
+    double u = double(i) / double(maxX);
+    double v = double(j) / double(maxY);
+
+    //direction은 "화면상의 Point - origin" 의 형태가 더 명확함
+    //Vector3 direction = lowerLeftCenter + u * horizontal + v * vertical - origin;
+    Ray r(origin, lowerLeftCenter + u * horizontal + v * vertical);
+
+    frameBuffer[pixelIndex] = RayColor(r);
 }
 
 int main()
@@ -141,7 +157,11 @@ int main()
     dim3 blocks(imageWidth / blockWidth + 1, imageHeight / blockHeight + 1);
     dim3 threads(blockWidth, blockHeight);
 
-    Render<<<blocks, threads>>>(frameBuffer, imageWidth, imageHeight);
+    Render<<<blocks, threads>>>(frameBuffer, imageWidth, imageHeight,
+        Vector3(-2.0, -1.0, -1.0),   // lowerLeftCorner
+        Vector3(4.0, 0.0, 0.0),      // horizontal
+        Vector3(0.0, 2.0, 0.0),      // vertical
+        Vector3(0.0, 0.0, 0.0));     // origin
 
     //커널 실행 직후에는 비동기라서 에러가 늦게 나타나기에
     //두개의 에러 조합으로 실행 에러를 즉시 잡는게 좋음
