@@ -37,15 +37,9 @@ GLOBAL void addKernel(int* c, const int* a, const int* b)
     //gridDim.x    // 그리드의 x축 크기 (블록 개수)
 }
 
-//레이 방향 벡터를 단위 벡터로 변환후, Y 성분을 이용해 흰색과 하늘색을 Lerp 수행
-DEVICE Color RayColor(const Ray& r) 
-{
-    Vector3 unitDirection = UnitVector(r.direction());
-    double t = 0.5 * (unitDirection.y() + 1.0);
-    
-    //아래(흰색) -> 위(하늘색) 보간 (t = 0 흰색 아래를 향하는 방향, t = 1 하늘색 위를 향하는 방향)
-    return (1.0 - t) * Color(1.0, 1.0, 1.0) + t * Color(0.5, 0.7, 1.0);
-}
+DEVICE Color RayColor(const Ray& r); //Ray 방향 기반 배경색 계산
+
+DEVICE bool HitSphere(const Vec3& center, double radius, const Ray& r); //구체 교차 판정
 
 //렌더 커널(픽셀 병렬 처리)
 //Ray 방향의 y 성분에 따라 흰색 -> 하늘색 Gradient 생성
@@ -197,6 +191,37 @@ int main()
 #pragma endregion
 
 
+}
+
+DEVICE Color RayColor(const Ray& r)
+{
+    //중심(0,0,-1), 반지름 0.5 구체에 맞으면 빨간색
+    if (HitSphere(Vec3(0.0, 0.0, -1.0), 0.5, r))
+        return Color(1.0, 0.0, 0.0);
+
+    //배경: 하늘색 Gradient
+    
+    //레이 방향 벡터를 단위 벡터로 변환후
+    Vector3 unitDirection = UnitVector(r.direction());
+    //y 성분을 이용해 흰색과 하늘색을 Lerp 수행
+    double t = 0.5 * (unitDirection.y() + 1.0);
+
+    //아래(흰색) -> 위(하늘색) 보간 (t = 0 흰색 아래를 향하는 방향, t = 1 하늘색 위를 향하는 방향)
+    return (1.0 - t) * Color(1.0, 1.0, 1.0) + t * Color(0.5, 0.7, 1.0);
+}
+
+
+DEVICE bool HitSphere(const Vec3& center, double radius, const Ray& r)
+{
+    Vec3 oc = r.origin() - center;
+
+    double a = Dot(r.direction(), r.direction());
+    double b = 2.0 * Dot(oc, r.direction());
+    double c = Dot(oc, oc) - radius * radius;
+
+    //판별식
+    double discriminant = b * b - 4.0 * a * c; //b^2-4ac
+    return (discriminant > 0.0);
 }
 
 cudaError_t addWithCuda(int* c, const int* a, const int* b, unsigned int size)

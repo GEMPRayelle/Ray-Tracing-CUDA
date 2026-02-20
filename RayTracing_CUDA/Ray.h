@@ -13,6 +13,7 @@ public:
 	DEVICE Ray() {}
 
 	DEVICE Ray(const Point3& origin, const Vector3& direction) : orig(origin), dir(direction) {}
+	DEVICE Ray(const Ray& other) : orig(other.orig), dir(other.dir) {}
 
 	DEVICE const Point3& origin() const { return orig; }
 	DEVICE const Vector3& direction() const { return dir; }
